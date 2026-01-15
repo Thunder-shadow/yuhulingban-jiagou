@@ -3,7 +3,6 @@ import sys
 import asyncio
 from pathlib import Path
 from dotenv import load_dotenv
-from sqlalchemy.sql.functions import user
 
 load_dotenv()
 # 添加项目根目录到路径
@@ -31,7 +30,7 @@ def create_test_user(db: Session) -> User:
         print("测试用户已存在")
         return existing_user
 
-        # 创建 UserCreate 对象
+    # 创建 UserCreate 对象
     user_data = UserCreate(
         username="test_user",
         email="2956226494@qq.com",
@@ -44,62 +43,26 @@ def create_test_user(db: Session) -> User:
     return user
 
 
-def create_test_agent(db: Session, user: User) -> AgentConfig:
-    """创建测试智能体（适配硅基流动）"""
-    from app.schemas import AgentConfigCreate  # 添加导入
+def get_agniya_agent(db: Session) -> AgentConfig:
+    """获取阿格尼娅智能体"""
+    # 根据你的实际情况修改查询条件
+    # 可能是通过 name、display_name 或其他字段
 
-    agent_service = AgentService(db)
+    agniya_agent = db.query(AgentConfig).filter(
+        (AgentConfig.name == "agniya") |
+        (AgentConfig.display_name == "阿格尼娅")
+    ).first()
 
-    # 检查智能体是否已存在
-    existing_agent = db.query(AgentConfig).filter(AgentConfig.name == "test_agent").first()
-    if existing_agent:
-        print("测试智能体已存在")
-        return existing_agent
+    if not agniya_agent:
+        # 如果找不到阿格尼娅，找第一个可用的智能体
+        print("未找到阿格尼娅智能体，使用第一个可用智能体")
+        agniya_agent = db.query(AgentConfig).first()
 
-        # 创建智能体配置字典
-    agent_config_dict = {
-        "name": "test_agent",
-        "display_name": "测试助手",
-        #"description": "用于本地测试的智能助手",
-        "icon": "🤖",
-        "icon_background": "#E8F4FD",
-        "character_profile": {
-            "name": "小助手",
-            "personality": "友好、耐心、乐于助人",
-            "gender": "无性别",
-            "age": "永生",
-            "race": "AI",
-            "appearance": "虚拟形象",
-            "clothing": "简约风格",
-            "traits": ["聪明", "友善", "耐心"],
-            "skills": ["问答", "聊天", "帮助"],
-            "goals": "帮助用户解决问题"
-        },
-        "opening_statement": "*微笑着向你挥手*\n\"你好！我是小助手，很高兴为你服务！\"",
-        "background_story": "我是一个专门为帮助用户而设计的AI助手。",
-        "model_config": {
-            "provider": "openai_api_compatible",
-            "model": "Qwen/Qwen2.5-7B-Instruct",
-            "temperature": 0.7,
-            "top_p": 0.5,
-            "presence_penalty": 0.1,
-            "max_tokens": 800
-        },
-        "stages": ["陌生期", "熟悉期", "友好期", "亲密期"],
-        "output_format": {
-            "max_length": 150,
-            "format_rules": "自然对话，无需特殊格式",
-            "example": "\"你好！有什么可以帮助你的吗？\""
-        }
-    }
+    if not agniya_agent:
+        raise Exception("数据库中没有任何智能体配置，请先创建智能体")
 
-    # 转换为 AgentConfigCreate 对象
-    agent_data = AgentConfigCreate(**agent_config_dict)
-
-    # 传递 AgentConfigCreate 对象
-    agent = agent_service.create_agent(agent_data, user.id)
-    print(f"创建测试智能体: {agent.display_name}")
-    return agent
+    print(f"使用智能体: {agniya_agent.display_name} ({agniya_agent.name})")
+    return agniya_agent
 
 
 async def test_chat(db: Session, user: User, agent: AgentConfig):
@@ -108,12 +71,12 @@ async def test_chat(db: Session, user: User, agent: AgentConfig):
 
     chat_service = ChatService(db)
 
-    # 测试消息
+    # 测试消息 - 针对阿格尼娅的对话
     test_messages = [
-        "你好，你是谁？",
-        "你能帮我做什么？",
-        "今天天气怎么样？",
-        "谢谢你的帮助"
+        "你好，阿格尼娅！",
+        "今天过得怎么样？",
+        "能给我讲个故事吗？",
+        "谢谢你的陪伴！"
     ]
 
     conversation_id = None
@@ -126,7 +89,7 @@ async def test_chat(db: Session, user: User, agent: AgentConfig):
             # 发送消息
             response = await chat_service.process_chat(
                 user_id=user.id,
-                agent_name=agent.name,
+                agent_name=agent.name,  # 使用智能体的 name 字段
                 message=message,
                 conversation_id=conversation_id,
                 user_info=None
@@ -141,6 +104,8 @@ async def test_chat(db: Session, user: User, agent: AgentConfig):
 
         except Exception as e:
             print(f"聊天出错: {e}")
+            import traceback
+            traceback.print_exc()
             break
 
 
@@ -163,9 +128,11 @@ def main():
         db = SessionLocal()
 
         try:
-            # 创建测试数据
+            # 创建测试用户
             user = create_test_user(db)
-            agent = create_test_agent(db, user)
+
+            # 获取阿格尼娅智能体
+            agent = get_agniya_agent(db)
 
             # 提交创建的数据
             db.commit()

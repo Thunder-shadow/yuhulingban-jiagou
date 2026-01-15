@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     # LLM API
     LLM_API_BASE_URL: str = "https://api.siliconflow.cn/v1"
     LLM_API_KEY: str = "sk-mbptrzkhtqyrwzagbkapraweuelhdpyyxigmnahgkofwohlh"
-    DEFAULT_MODEL: str = "DeepSeek-V3"
+    DEFAULT_MODEL: str = "Pro/deepseek-ai/DeepSeek-V3"
 
     # 文件存储
     UPLOAD_DIR: Path = Path("uploads")

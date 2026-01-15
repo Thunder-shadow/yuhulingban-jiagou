@@ -109,7 +109,7 @@ class AgentService:
             character_profile=agent_data.character_profile,
             opening_statement=agent_data.opening_statement,
             background_story=agent_data.background_story,
-            model_config=agent_data.model_config or default_model_config,
+            model_config=agent_data.agent_model_config or default_model_config,
             stages=agent_data.stages or ["陌生期", "熟悉期", "友好期", "亲密期"],
             output_format=agent_data.output_format or {
                 "max_length": 150,

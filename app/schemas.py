@@ -72,10 +72,16 @@ class AgentConfigBase(BaseModel):
     character_profile: Dict[str, Any]
 
 
+
 class AgentConfigCreate(AgentConfigBase):
     """智能体创建模型"""
     opening_statement: Optional[str] = None
     background_story: Optional[str] = None
+    stages: Optional[List[str]] = None  # 添加这行
+    agent_model_config: Optional[Dict[str, Any]] = None  # 添加这行
+    output_format: Optional[Dict[str, Any]] = None  # 添加这行
+    icon: Optional[str] = None  # 添加这行
+    icon_background: Optional[str] = None  # 添加这行
 
 
 class AgentConfigResponse(AgentConfigBase):

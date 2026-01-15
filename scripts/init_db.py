@@ -18,7 +18,7 @@ def seed_initial_agents(db: Session):
     agnia_config = {
         "name": "agnia",
         "display_name": "阿格尼娅",
-        "description": "勇者小队的最后幸存者，曾是一位爱好和平的公主",
+        #"description": "勇者小队的最后幸存者，曾是一位爱好和平的公主",
         "icon": "⚔️",
         "icon_background": "#FFEAD5",
         "character_profile": {
