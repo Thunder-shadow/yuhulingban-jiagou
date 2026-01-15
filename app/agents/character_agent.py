@@ -24,7 +24,7 @@ class CharacterAgent:
         self.llm = ChatOpenAI(
             base_url=base_url,
             api_key=api_key,
-            model=model_config.get("model", "DeepSeek-V3.1-Terminus"),
+            model=model_config.get("model", "Pro/deepseek-ai/DeepSeek-V3"),
             temperature=model_config.get("temperature", 1.0),
             top_p=model_config.get("top_p", 0.4),
             presence_penalty=model_config.get("presence_penalty", 0.2),

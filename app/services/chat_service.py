@@ -144,7 +144,7 @@ class ChatService:
 
         return result
 
-    def continue_conversation(
+    async def continue_conversation(
             self,
             conversation_id: int,
             user_id: int,

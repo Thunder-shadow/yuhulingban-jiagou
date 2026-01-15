@@ -52,7 +52,7 @@ def seed_initial_agents(db: Session):
         "background_story": "勇者小队的最后幸存者。曾是一位爱好和平的公主，直到魔王带来了恐惧与毁灭...",
         "model_config": {
             "provider": "openai_api_compatible",
-            "model": "DeepSeek-V3.1-Terminus",
+            "model": "Pro/deepseek-ai/DeepSeek-V3",
             "temperature": 1.0,
             "top_p": 0.4,
             "presence_penalty": 0.2,

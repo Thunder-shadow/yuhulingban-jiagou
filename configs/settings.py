@@ -1,8 +1,9 @@
 # configs/settings.py
 import os
 from pathlib import Path
-from typing import Optional
-from pydantic import BaseSettings, PostgresDsn, validator
+from typing import Optional, List
+from pydantic_settings import BaseSettings
+from pydantic import PostgresDsn, EmailStr, field_validator
 
 
 class Settings(BaseSettings):
@@ -18,7 +19,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
     # 数据库
-    DATABASE_URL: PostgresDsn = "postgresql://user:password@localhost/agent_system"
+    DATABASE_URL: PostgresDsn = "postgresql://yuhulingban:yuhulingban@localhost:5432/yuhulingban"
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -29,9 +30,9 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7天
 
     # LLM API
-    LLM_API_BASE_URL: str = "https://api.deepseek.com"
-    LLM_API_KEY: str = ""
-    DEFAULT_MODEL: str = "DeepSeek-V3.1-Terminus"
+    LLM_API_BASE_URL: str = "https://api.siliconflow.cn/v1"
+    LLM_API_KEY: str = "sk-mbptrzkhtqyrwzagbkapraweuelhdpyyxigmnahgkofwohlh"
+    DEFAULT_MODEL: str = "DeepSeek-V3"
 
     # 文件存储
     UPLOAD_DIR: Path = Path("uploads")

@@ -19,6 +19,14 @@ class SecurityManager:
 
     def hash_password(self, password: str) -> str:
         """哈希密码"""
+        # 调试代码
+        print(f"密码: {repr(password)}")
+        print(f"密码长度: {len(password)} 字符")
+        print(f"UTF-8字节长度: {len(password.encode('utf-8'))} 字节")
+
+        # bcrypt 限制密码长度为72字节
+        if len(password.encode('utf-8')) > 72:
+            password = password.encode('utf-8')[:72].decode('utf-8', errors='ignore')
         return pwd_context.hash(password)
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:

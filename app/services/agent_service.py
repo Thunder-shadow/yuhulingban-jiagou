@@ -70,15 +70,14 @@ class AgentService:
         agent = AgentConfig(
             name=agent_data.name,
             display_name=agent_data.display_name,
-            description=agent_data.description,
             character_profile=agent_data.character_profile,
             opening_statement=agent_data.opening_statement,
             background_story=agent_data.background_story,
-            creator_id=creator_id,
-            is_active=True,
-            is_public=False,  # 新创建的智能体默认不公开
+            #creator_id=creator_id,
+            is_active=1,  # 修改：使用整数1
+            #is_public=False,  # 保持不变
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            #updated_at=datetime.utcnow()
         )
 
         self.db.add(agent)
@@ -189,8 +188,8 @@ class AgentService:
             background_story=config_dict.get('background_story'),
             model_config=config_dict.get('model_config', {
                 "provider": "openai_api_compatible",
-                "model": "DeepSeek-V3.1-Terminus",
-                "temperature": 1.0
+                "model": "Pro/deepseek-ai/DeepSeek-V3",
+                "temperature": 0.8
             }),
             stages=config_dict.get('stages', ["陌生期", "熟悉期", "友好期", "亲密期"]),
             output_format=config_dict.get('output_format', {

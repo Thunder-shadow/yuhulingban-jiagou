@@ -7,6 +7,25 @@ import json
 
 Base = declarative_base()
 
+# 在 app/models.py 文件顶部添加导入
+from sqlalchemy import Enum
+from enum import Enum as PyEnum
+
+
+# 添加这些类定义（可以放在 User 类之前或之后）
+class UserStatus(str, PyEnum):
+    """用户状态枚举"""
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    SUSPENDED = "suspended"
+
+
+class UserRole(str, PyEnum):
+    """用户角色枚举"""
+    USER = "user"
+    ADMIN = "admin"
+    MODERATOR = "moderator"
+
 
 class User(Base):
     """用户表"""
@@ -15,12 +34,45 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(100), unique=True, index=True)
     email = Column(String(255), unique=True, index=True)
+    hashed_password = Column(String(255))
+    salt = Column(String(255))
+    display_name = Column(String(100))
+    avatar_url = Column(String(500))
+    bio = Column(Text)
+    status = Column(Enum(UserStatus), default=UserStatus.ACTIVE)
+    role = Column(Enum(UserRole), default=UserRole.USER)
+    preferences = Column(JSON, default={})
+    last_login_at = Column(DateTime)
+    last_active_at = Column(DateTime)
+    login_count = Column(Integer, default=0)
+    password_reset_token = Column(String(255))
+    password_reset_sent_at = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # 关系
     conversations = relationship("Conversation", back_populates="user")
     agent_states = relationship("AgentState", back_populates="user")
+    conversation_count = Column(Integer, default=0)  # 对话数量
+    message_count = Column(Integer, default=0)  # 消息数量
+    total_tokens_used = Column(Integer, default=0)
+
+    gender = Column(String(20))  # 性别
+
+class UserActivityLog(Base):
+    """用户活动日志表"""
+    __tablename__ = 'user_activity_logs'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'))
+    action_type = Column(String(50))  # 操作类型
+    action_details = Column(JSON, default={})  # 操作详情
+    ip_address = Column(String(45))  # IP地址
+    user_agent = Column(Text)  # 用户代理
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # 关系
+    user = relationship("User", backref="activity_logs")
 
 
 class AgentConfig(Base):
@@ -38,10 +90,10 @@ class AgentConfig(Base):
     opening_statement = Column(Text)  # 开场白
     background_story = Column(Text)  # 背景故事
 
-    # 模型配置
+    # 模型配置deepseek
     model_config = Column(JSON, default={
-        "provider": "openai_api_compatible",
-        "model": "DeepSeek-V3.1-Terminus",
+        "provider": "https://api.siliconflow.cn/v1",
+        "model": "Pro/deepseek-ai/DeepSeek-V3",
         "temperature": 1.0,
         "top_p": 0.4,
         "presence_penalty": 0.2
@@ -63,6 +115,9 @@ class AgentConfig(Base):
     conversations = relationship("Conversation", back_populates="agent")
     agent_states = relationship("AgentState", back_populates="agent")
 
+    usage_count = Column(Integer, default=0)  # 使用次数
+    total_conversations = Column(Integer, default=0)  # 总对话数
+
 
 class Conversation(Base):
     """对话会话表"""
@@ -71,16 +126,21 @@ class Conversation(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey('users.id'))
     agent_id = Column(Integer, ForeignKey('agent_configs.id'))
-    title = Column(String(255))  # 对话标题（自动生成）
+    title = Column(String(255))
 
     # 当前状态
     current_stage = Column(String(50), default="陌生期")
-    metadata = Column(JSON, default={})  # 额外的元数据
+    conversation_metadata = Column(JSON, default={})
+
+    # 添加统计字段
+    message_count = Column(Integer, default=0)  # 消息数量
+    total_tokens = Column(Integer, default=0)  # 总token数
+    last_message_at = Column(DateTime)  # 最后消息时间
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # 关系
+    # 关系保持不变
     user = relationship("User", back_populates="conversations")
     agent = relationship("AgentConfig", back_populates="conversations")
     messages = relationship("Message", back_populates="conversation",
@@ -102,7 +162,7 @@ class Message(Base):
     # 元数据
     token_count = Column(Integer)
     model_used = Column(String(100))
-    metadata = Column(JSON, default={})  # 如：情感分析、主题等
+    conversation_metadata = Column(JSON, default={})  # 如：情感分析、主题等
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
