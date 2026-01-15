@@ -6,10 +6,13 @@ import json
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-
+from configs.settings import settings
+from configs.constants import DEFAULT_OUTPUT_FORMAT
 from app.models import AgentConfig, AgentState
 from app.agents.schema_manager import AgentSchemaManager
-
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain.chat_models.base import BaseChatModel
+import asyncio
 
 class CharacterAgent:
     """角色智能体"""
@@ -19,12 +22,12 @@ class CharacterAgent:
         self.agent_id = agent_config.id
         self.name = agent_config.name
 
-        # 初始化模型配置
+        # 初始化模型配置 - 使用settings中的配置
         model_config = agent_config.model_config or {}
         self.llm = ChatOpenAI(
             base_url=base_url,
             api_key=api_key,
-            model=model_config.get("model", "Pro/deepseek-ai/DeepSeek-V3"),
+            model=model_config.get("model", settings.DEFAULT_MODEL),
             temperature=model_config.get("temperature", 1.0),
             top_p=model_config.get("top_p", 0.4),
             presence_penalty=model_config.get("presence_penalty", 0.2),
@@ -42,7 +45,8 @@ class CharacterAgent:
     def build_system_prompt(self, stage: str, agent_state: Optional[AgentState] = None) -> str:
         """构建系统提示词"""
         profile = self.character_profile
-        output_format = self.config.output_format or {}
+        # 使用常量中的默认配置
+        output_format = self.config.output_format or DEFAULT_OUTPUT_FORMAT
 
         # 阶段描述
         stage_descriptions = {
@@ -249,3 +253,47 @@ class CharacterAgent:
             extracted["key_points"].append("道歉或原谅")
 
         return extracted
+
+    async def generate_response_stream(
+            self,
+            user_input: str,
+            user_info: Dict[str, Any],
+            system_prompt: str,
+            conversation_history: List[Dict[str, Any]]
+    ):
+        """流式生成响应"""
+        from datetime import datetime
+
+        # 构建消息
+        messages = [SystemMessage(content=system_prompt)]
+
+        # 添加历史消息
+        for msg in conversation_history[-5:]:
+            if msg["role"] == "user":
+                messages.append(HumanMessage(content=msg["content"]))
+            else:
+                messages.append(AIMessage(content=msg["content"]))
+
+                # 添加当前输入
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        user_prompt = f"""当前时间：{current_time}  
+
+用户信息：  
+- 称呼：{user_info.get('name', '用户')}  
+- 性别：{user_info.get('gender', '未知')}  
+- 特征：{user_info.get('traits', '')}  
+
+用户消息：{user_input}  
+
+请以{self.character_profile.get('name', '角色')}的身份回复："""
+
+        messages.append(HumanMessage(content=user_prompt))
+
+        # 流式调用LLM
+        try:
+            # 使用langchain的流式API
+            async for chunk in self.llm.astream(messages):
+                if hasattr(chunk, 'content') and chunk.content:
+                    yield chunk.content
+        except Exception as e:
+            yield f"生成响应时出错: {str(e)}"

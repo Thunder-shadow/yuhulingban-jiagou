@@ -1,4 +1,3 @@
-# app/agents/memory_manager.py
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
@@ -47,8 +46,7 @@ class MemoryManager:
         """更新智能体状态"""
         agent_state = self.get_or_create_agent_state()
 
-        # 更新统计信息
-        agent_state.total_messages += 2
+        # 移除total_messages字段引用
         agent_state.last_interaction_at = datetime.utcnow()
         agent_state.updated_at = datetime.utcnow()
 
@@ -64,7 +62,7 @@ class MemoryManager:
 
             agent_state.key_memories = current_memories
 
-        # 更新用户特征
+            # 更新用户特征
         self._update_user_traits(agent_state, user_input, extracted_info)
 
         # 更新话题
@@ -177,7 +175,11 @@ class MemoryManager:
 
     def _update_relationship_stage(self, agent_state: AgentState):
         """更新关系阶段"""
-        interaction_count = agent_state.total_messages // 2
+        # 动态计算互动次数
+        interaction_count = self.db.query(Message).join(Conversation).filter(
+            Conversation.user_id == self.user_id,
+            Conversation.agent_id == self.agent_id
+        ).count()
 
         # 基于互动次数调整阶段
         if interaction_count < 5:
@@ -189,7 +191,7 @@ class MemoryManager:
         else:
             new_stage = "亲密期"
 
-        # 基于关键记忆数量调整
+            # 基于关键记忆数量调整
         key_memories_count = len(agent_state.key_memories or [])
         if key_memories_count > 8 and new_stage == "友好期":
             new_stage = "亲密期"

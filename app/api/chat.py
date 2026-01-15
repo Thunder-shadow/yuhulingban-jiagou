@@ -3,7 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSoc
 from sqlalchemy.orm import Session
 import json
 import asyncio
-
+from fastapi.responses import StreamingResponse
+import asyncio
+import json
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import User, AgentConfig
@@ -156,3 +158,72 @@ async def websocket_chat(
         })
     finally:
         await websocket.close()
+
+
+@router.post("/stream")
+async def chat_stream(
+        chat_request: ChatRequest,
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+):
+    """流式聊天接口"""
+
+    async def generate_stream():
+        try:
+            service = ChatService(db)
+
+            # 获取智能体配置（使用缓存）
+            agent_service = AgentService(db)
+            agent_config = agent_service.get_agent_by_name(chat_request.agent_name)
+
+            if not agent_config:
+                yield f"data: {json.dumps({'type': 'error', 'message': '智能体不存在'})}\n\n"
+                return
+
+                # 创建流式智能体
+            agent = CharacterAgent(agent_config, settings.LLM_API_BASE_URL, settings.LLM_API_KEY)
+
+            # 获取对话历史
+            memory_manager = MemoryManager(db, agent_config["id"], current_user.id)
+            conversation = service._get_or_create_conversation(
+                current_user.id, agent_config["id"], chat_request.conversation_id
+            )
+            history = memory_manager.get_conversation_history(conversation.id, limit=10)
+            agent_state = memory_manager.get_or_create_agent_state()
+
+            user_info = {
+                "name": current_user.username,
+                "gender": current_user.gender or "unknown",
+                "traits": current_user.bio or ""
+            }
+
+            # 构建系统提示
+            system_prompt = agent.build_system_prompt(agent_state.current_stage, agent_state)
+
+            # 发送开始标记
+            yield f"data: {json.dumps({'type': 'start', 'conversation_id': conversation.id})}\n\n"
+
+            # 流式生成响应
+            full_response = ""
+            async for chunk in agent.generate_response_stream(
+                    chat_request.message, user_info, system_prompt, history
+            ):
+                full_response += chunk
+                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+
+                # 保存完整响应到数据库
+            service._save_stream_response(
+                conversation.id, chat_request.message, full_response, agent_state
+            )
+
+            # 发送结束标记
+            yield f"data: {json.dumps({'type': 'end', 'current_stage': agent_state.current_stage})}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        generate_stream(),
+        media_type="text/plain",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
+    )

@@ -6,7 +6,8 @@ from sqlalchemy import desc, or_
 
 from app.models import AgentConfig, User
 from app.schemas import AgentConfigCreate
-
+from configs.settings import settings
+from app.utils.cache import cache_query
 
 class AgentService:
     """智能体服务"""
@@ -42,19 +43,45 @@ class AgentService:
             # 假设character_profile中有category字段
             query = query.filter(AgentConfig.character_profile['category'].astext == category)
 
-        # 排序和分页
+            # 排序和分页
         query = query.order_by(desc(AgentConfig.usage_count), desc(AgentConfig.created_at))
         query = query.offset(skip).limit(limit)
 
         return query.all()
 
-    def get_agent(self, agent_id: int) -> Optional[AgentConfig]:
-        """获取智能体"""
-        return self.db.query(AgentConfig).filter(AgentConfig.id == agent_id).first()
+    @cache_query(expire_minutes=10)
+    def get_agent(self, agent_id: int) -> Optional[Dict[str, Any]]:
+        """获取智能体（带缓存）"""
+        agent = self.db.query(AgentConfig).filter(AgentConfig.id == agent_id).first()
+        if not agent:
+            return None
 
-    def get_agent_by_name(self, agent_name: str) -> Optional[AgentConfig]:
-        """通过名称获取智能体"""
-        return self.db.query(AgentConfig).filter(AgentConfig.name == agent_name).first()
+        return {
+            "id": agent.id,
+            "name": agent.name,
+            "display_name": agent.display_name,
+            "character_profile": agent.character_profile,
+            "model_config": agent.model_config,
+            "stages": agent.stages,
+            "output_format": agent.output_format
+        }
+
+    @cache_query(expire_minutes=10)
+    def get_agent_by_name(self, agent_name: str) -> Optional[Dict[str, Any]]:
+        """通过名称获取智能体（带缓存）"""
+        agent = self.db.query(AgentConfig).filter(AgentConfig.name == agent_name).first()
+        if not agent:
+            return None
+
+        return {
+            "id": agent.id,
+            "name": agent.name,
+            "display_name": agent.display_name,
+            "character_profile": agent.character_profile,
+            "model_config": agent.model_config,
+            "stages": agent.stages,
+            "output_format": agent.output_format
+        }
 
     def create_agent(self, agent_data: AgentConfigCreate, creator_id: int) -> AgentConfig:
         """创建智能体"""
@@ -66,6 +93,15 @@ class AgentService:
         if existing:
             raise ValueError(f"智能体名称 '{agent_data.name}' 已存在")
 
+            # 使用settings中的默认配置，避免硬编码
+        default_model_config = {
+            "provider": "openai_api_compatible",
+            "model": settings.DEFAULT_MODEL,
+            "temperature": 1.0,
+            "top_p": 0.4,
+            "presence_penalty": 0.2
+        }
+
         # 创建智能体
         agent = AgentConfig(
             name=agent_data.name,
@@ -73,11 +109,14 @@ class AgentService:
             character_profile=agent_data.character_profile,
             opening_statement=agent_data.opening_statement,
             background_story=agent_data.background_story,
-            #creator_id=creator_id,
-            is_active=1,  # 修改：使用整数1
-            #is_public=False,  # 保持不变
+            model_config=agent_data.model_config or default_model_config,
+            stages=agent_data.stages or ["陌生期", "熟悉期", "友好期", "亲密期"],
+            output_format=agent_data.output_format or {
+                "max_length": 150,
+                "format_rules": "旁白无需括号，每条旁白与独白必须换行"
+            },
+            is_active=1,
             created_at=datetime.utcnow(),
-            #updated_at=datetime.utcnow()
         )
 
         self.db.add(agent)
@@ -92,7 +131,7 @@ class AgentService:
         if not agent:
             raise ValueError("智能体不存在")
 
-        # 更新字段
+            # 更新字段
         agent.display_name = agent_data.display_name
         agent.description = agent_data.description
         agent.character_profile = agent_data.character_profile
@@ -111,7 +150,7 @@ class AgentService:
         if not agent:
             return False
 
-        # 检查是否有对话关联
+            # 检查是否有对话关联
         from app.models import Conversation
         conversation_count = self.db.query(Conversation).filter(
             Conversation.agent_id == agent_id
@@ -125,15 +164,7 @@ class AgentService:
 
         return True
 
-    def update_agent_usage(self, agent_id: int):
-        """更新智能体使用统计"""
-        agent = self.get_agent(agent_id)
-        if not agent:
-            return
-
-        agent.usage_count += 1
-        agent.updated_at = datetime.utcnow()
-        self.db.commit()
+        # 移除重复的update_agent_usage方法，统一在ChatService中处理
 
     def set_agent_visibility(self, agent_id: int, is_public: bool) -> AgentConfig:
         """设置智能体可见性"""
@@ -168,7 +199,7 @@ class AgentService:
             if field not in config_dict:
                 raise ValueError(f"缺少必需字段: {field}")
 
-        # 检查名称是否已存在
+                # 检查名称是否已存在
         existing = self.db.query(AgentConfig).filter(
             AgentConfig.name == config_dict['name']
         ).first()
@@ -178,6 +209,13 @@ class AgentService:
             import uuid
             config_dict['name'] = f"{config_dict['name']}_{str(uuid.uuid4())[:8]}"
 
+            # 使用settings中的默认配置
+        default_model_config = {
+            "provider": "openai_api_compatible",
+            "model": settings.DEFAULT_MODEL,
+            "temperature": 0.8
+        }
+
         # 创建智能体
         agent = AgentConfig(
             name=config_dict['name'],
@@ -186,11 +224,7 @@ class AgentService:
             character_profile=config_dict['character_profile'],
             opening_statement=config_dict.get('opening_statement'),
             background_story=config_dict.get('background_story'),
-            model_config=config_dict.get('model_config', {
-                "provider": "openai_api_compatible",
-                "model": "Pro/deepseek-ai/DeepSeek-V3",
-                "temperature": 0.8
-            }),
+            model_config=config_dict.get('model_config', default_model_config),
             stages=config_dict.get('stages', ["陌生期", "熟悉期", "友好期", "亲密期"]),
             output_format=config_dict.get('output_format', {
                 "max_length": 150,

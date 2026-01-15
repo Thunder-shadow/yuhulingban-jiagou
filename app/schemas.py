@@ -152,3 +152,15 @@ class ChatResponse(BaseModel):
     current_stage: str
     message_id: int
     timestamp: datetime
+
+
+class ChangePasswordRequest(BaseModel):
+    """修改密码请求模型"""
+    old_password: str
+    new_password: str
+
+    @validator('new_password')
+    def validate_new_password(cls, v):
+        if len(v) < 8:
+            raise ValueError('新密码长度至少8位')
+        return v

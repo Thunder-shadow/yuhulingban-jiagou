@@ -35,7 +35,7 @@ class User(Base):
     username = Column(String(100), unique=True, index=True)
     email = Column(String(255), unique=True, index=True)
     hashed_password = Column(String(255))
-    salt = Column(String(255))
+    # 移除冗余的salt字段，因为bcrypt已经包含盐值
     display_name = Column(String(100))
     avatar_url = Column(String(500))
     bio = Column(Text)
@@ -53,11 +53,9 @@ class User(Base):
     # 关系
     conversations = relationship("Conversation", back_populates="user")
     agent_states = relationship("AgentState", back_populates="user")
-    conversation_count = Column(Integer, default=0)  # 对话数量
-    message_count = Column(Integer, default=0)  # 消息数量
-    total_tokens_used = Column(Integer, default=0)
-
+    # 移除冗余的统计字段，通过关联查询动态计算
     gender = Column(String(20))  # 性别
+
 
 class UserActivityLog(Base):
     """用户活动日志表"""
@@ -90,16 +88,16 @@ class AgentConfig(Base):
     opening_statement = Column(Text)  # 开场白
     background_story = Column(Text)  # 背景故事
 
-    # 模型配置deepseek
+    # 模型配置 - 从settings.py引用默认值
     model_config = Column(JSON, default={
-        "provider": "https://api.siliconflow.cn/v1",
-        "model": "Pro/deepseek-ai/DeepSeek-V3",
+        "provider": "openai_api_compatible",
+        "model": "DeepSeek-V3",
         "temperature": 1.0,
         "top_p": 0.4,
         "presence_penalty": 0.2
     })
 
-    # 阶段定义
+    # 阶段定义 - 从常量引用
     stages = Column(JSON, default=["陌生期", "熟悉期", "友好期", "亲密期"])
 
     # 输出格式要求
@@ -132,9 +130,7 @@ class Conversation(Base):
     current_stage = Column(String(50), default="陌生期")
     conversation_metadata = Column(JSON, default={})
 
-    # 添加统计字段
-    message_count = Column(Integer, default=0)  # 消息数量
-    total_tokens = Column(Integer, default=0)  # 总token数
+    # 移除冗余的统计字段，通过关联查询动态计算
     last_message_at = Column(DateTime)  # 最后消息时间
 
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -184,9 +180,7 @@ class AgentState(Base):
     relationship_level = Column(Integer, default=0)  # 关系等级 0-100
     current_stage = Column(String(50), default="陌生期")
 
-    # 统计信息
-    total_messages = Column(Integer, default=0)
-    total_tokens = Column(Integer, default=0)
+    # 移除冗余的统计字段，通过关联查询动态计算
 
     # 偏好和特征
     user_traits = Column(JSON, default={})  # 从对话中提取的用户特征
@@ -200,14 +194,15 @@ class AgentState(Base):
     agent = relationship("AgentConfig", back_populates="agent_states")
 
 
-# 数据库连接
-DATABASE_URL = "postgresql://user:password@localhost/agent_db"
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# 移除硬编码的数据库连接配置，统一使用settings
+# DATABASE_URL = "postgresql://user:password@localhost/agent_db"
+# engine = create_engine(DATABASE_URL)
+# SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def get_db():
     """获取数据库会话"""
+    from app.database import SessionLocal
     db = SessionLocal()
     try:
         yield db

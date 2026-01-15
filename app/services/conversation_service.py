@@ -25,7 +25,7 @@ class ConversationService:
         if not agent:
             raise ValueError("智能体不存在")
 
-        # 创建对话
+            # 创建对话
         conversation = Conversation(
             user_id=user_id,
             agent_id=agent_id,
@@ -36,12 +36,6 @@ class ConversationService:
         self.db.add(conversation)
         self.db.commit()
         self.db.refresh(conversation)
-
-        # 更新用户对话计数
-        user = self.db.query(User).filter(User.id == user_id).first()
-        if user:
-            user.conversation_count += 1
-            self.db.commit()
 
         return conversation
 
@@ -93,7 +87,7 @@ class ConversationService:
         if not conversation:
             return False
 
-        # 删除相关消息
+            # 删除相关消息
         self.db.query(Message).filter(Message.conversation_id == conversation_id).delete()
 
         # 删除对话
@@ -115,7 +109,7 @@ class ConversationService:
         if not conversation:
             raise ValueError("对话不存在")
 
-        # 创建消息
+            # 创建消息
         message = Message(
             conversation_id=conversation_id,
             role=message_data.role,
@@ -128,16 +122,14 @@ class ConversationService:
         self.db.add(message)
 
         # 更新对话统计
-        conversation.message_count += 1
-        conversation.total_tokens += token_count
         conversation.updated_at = datetime.utcnow()
         conversation.last_message_at = datetime.utcnow()
 
-        # 更新用户统计
-        user = self.db.query(User).filter(User.id == conversation.user_id).first()
-        if user:
-            user.message_count += 1
-            user.total_tokens_used += token_count
+        # 移除用户统计更新，改为动态计算
+        # user = self.db.query(User).filter(User.id == conversation.user_id).first()
+        # if user:
+        #     user.message_count += 1
+        #     user.total_tokens_used += token_count
 
         self.db.commit()
         self.db.refresh(message)
@@ -151,11 +143,11 @@ class ConversationService:
             skip: int = 0,
             limit: int = 100
     ) -> List[Message]:
-        """获取对话消息"""
+        """获取对话消息列表"""
         query = self.db.query(Message).filter(Message.conversation_id == conversation_id)
 
         if user_id:
-            # 检查对话是否属于用户
+            # 验证对话属于该用户
             conversation = self.db.query(Conversation).filter(
                 Conversation.id == conversation_id,
                 Conversation.user_id == user_id
@@ -163,10 +155,5 @@ class ConversationService:
             if not conversation:
                 return []
 
-        return (
-            query
-            .order_by(Message.created_at.asc())
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        query = query.order_by(Message.created_at.asc()).offset(skip).limit(limit)
+        return query.all()

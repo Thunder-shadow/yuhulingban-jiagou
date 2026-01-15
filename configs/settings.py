@@ -41,6 +41,15 @@ class Settings(BaseSettings):
     # 速率限制
     RATE_LIMIT_PER_MINUTE: int = 60
 
+    # 缓存配置
+    CACHE_TTL_SECONDS: int = 300  # 5分钟
+    AGENT_CACHE_TTL: int = 600  # 10分钟
+    USER_CACHE_TTL: int = 300  # 5分钟
+
+    # 流式响应配置
+    STREAM_CHUNK_SIZE: int = 100  # 流式响应块大小
+    STREAM_TIMEOUT: int = 30  # 流式响应超时时间
+
     class Config:
         env_file = ".env"
         case_sensitive = True

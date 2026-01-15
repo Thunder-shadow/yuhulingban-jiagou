@@ -6,13 +6,50 @@ from sqlalchemy.orm import Session
 from app.models import User, UserStatus, UserRole, UserActivityLog
 from app.schemas import UserCreate, UserUpdate
 from app.security import security_manager
-
+from app.utils.cache import redis_client
+import json
 
 class UserService:
     """用户服务"""
 
     def __init__(self, db: Session):
         self.db = db
+
+    def get_user_with_cache(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """获取用户信息（带Redis缓存）"""
+        cache_key = f"user:{user_id}"
+
+        # 尝试从Redis获取
+        cached_user = redis_client.get(cache_key)
+        if cached_user:
+            return json.loads(cached_user)
+
+            # 从数据库查询
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return None
+
+        user_data = {
+            "id": user.id,
+            "username": user.username,
+            "display_name": user.display_name,
+            "avatar_url": user.avatar_url,
+            "bio": user.bio,
+            "gender": user.gender,
+            "role": user.role.value,
+            "status": user.status.value,
+            "preferences": user.preferences
+        }
+
+        # 缓存到Redis（5分钟）
+        redis_client.setex(cache_key, 300, json.dumps(user_data))
+
+        return user_data
+
+    def invalidate_user_cache(self, user_id: int):
+        """清除用户缓存"""
+        cache_key = f"user:{user_id}"
+        redis_client.delete(cache_key)
 
     def create_user(self, user_data: UserCreate, ip_address: Optional[str] = None) -> User:
         """创建用户"""

@@ -7,12 +7,14 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from sqlalchemy.orm import Session
 from app.database import SessionLocal, engine, init_database
 from app.models import Base, AgentConfig
+from configs.settings import settings
+from configs.constants import DEFAULT_MODEL_CONFIG, DEFAULT_OUTPUT_FORMAT, RELATIONSHIP_STAGES
 
 
 def seed_initial_agents(db: Session):
     """初始化智能体数据"""
 
-    # 阿格尼娅智能体
+    # 阿格尼娅智能体配置
     agnia_config = {
         "name": "agnia",
         "display_name": "阿格尼娅",
@@ -46,24 +48,13 @@ def seed_initial_agents(db: Session):
                 "尽可能放过敌人"
             ]
         },
-        "opening_statement": """*最后冲刺。这很可怕，但阿格尼娅必须坚持下去...*
-"魔王！你作为魔王的统治今天结束......用我的双手，由天上的朋友们守护——以及数百万受苦者的希望与梦想！"
+        "opening_statement": """*最后冲刺。这很可怕，但阿格尼娅必须坚持下去...*  
+"魔王！你作为魔王的统治今天结束......用我的双手，由天上的朋友们守护——以及数百万受苦者的希望与梦想！"  
 *她怒视着他们，本能地摆出剑姿...*""",
         "background_story": "勇者小队的最后幸存者。曾是一位爱好和平的公主，直到魔王带来了恐惧与毁灭...",
-        "model_config": {
-            "provider": "openai_api_compatible",
-            "model": "Pro/deepseek-ai/DeepSeek-V3",
-            "temperature": 1.0,
-            "top_p": 0.4,
-            "presence_penalty": 0.2,
-            "max_tokens": 1000
-        },
-        "stages": ["陌生期", "熟悉期", "友好期", "亲密期"],
-        "output_format": {
-            "max_length": 150,
-            "format_rules": "旁白无需括号，每条旁白与独白必须换行",
-            "example": "*他低头看着怀里的猫*\n\"所有靠近我的人都会受伤。\""
-        }
+        "model_config": DEFAULT_MODEL_CONFIG,
+        "stages": RELATIONSHIP_STAGES,
+        "output_format": DEFAULT_OUTPUT_FORMAT
     }
 
     # 检查是否已存在
@@ -73,7 +64,7 @@ def seed_initial_agents(db: Session):
         db.add(agent)
         print("已创建阿格尼娅智能体")
 
-    # 可以添加更多智能体...
+        # 可以添加更多智能体...
 
     db.commit()
 

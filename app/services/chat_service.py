@@ -8,7 +8,7 @@ from app.agents.agent_factory import AgentFactory
 from app.agents.memory_manager import MemoryManager
 from app.schemas import MessageCreate
 from app.services.conversation_service import ConversationService
-
+from app.services.agent_service import AgentService
 
 class ChatService:
     """聊天服务"""
@@ -27,38 +27,38 @@ class ChatService:
             user_info: Optional[Dict[str, Any]] = None,
             stream: bool = False
     ) -> Dict[str, Any]:
-        """处理聊天消息"""
+        """处理聊天消息（优化版）"""
+
         # 1. 获取或创建对话
         conversation = None
         if conversation_id:
             conversation = self.conversation_service.get_conversation(conversation_id, user_id)
 
-        # 2. 获取智能体
-        agent_config = self.db.query(AgentConfig).filter(
-            AgentConfig.name == agent_name
-        ).first()
+            # 2. 获取智能体（使用缓存）
+        agent_service = AgentService(self.db)
+        agent_config_dict = agent_service.get_agent_by_name(agent_name)
 
-        if not agent_config:
+        if not agent_config_dict:
             raise ValueError(f"智能体 '{agent_name}' 不存在")
 
         if not conversation:
             # 创建新对话
             conversation = self.conversation_service.create_conversation(
                 user_id=user_id,
-                agent_id=agent_config.id,
-                title=f"与{agent_config.display_name}的对话"
+                agent_id=agent_config_dict["id"],
+                title=f"与{agent_config_dict['display_name']}的对话"
             )
 
-        # 3. 保存用户消息
+            # 3. 保存用户消息
         user_message = self.conversation_service.add_message(
             conversation_id=conversation.id,
             message_data=MessageCreate(content=message, role="user"),
-            token_count=len(message) // 2  # 简单估算
+            token_count=len(message) // 2
         )
 
         # 4. 获取智能体和记忆管理器
-        agent = self.agent_factory.get_agent(agent_config.id)
-        memory_manager = MemoryManager(self.db, agent_config.id, user_id)
+        agent = self.agent_factory.get_agent(agent_config_dict["id"])
+        memory_manager = MemoryManager(self.db, agent_config_dict["id"], user_id)
 
         # 5. 获取对话历史和智能体状态
         history = memory_manager.get_conversation_history(conversation.id, limit=10)
@@ -73,7 +73,7 @@ class ChatService:
                 "traits": user.bio or ""
             }
 
-        # 7. 生成响应
+            # 7. 生成响应
         result = agent.generate_response(
             user_input=message,
             user_info=user_info,
@@ -81,38 +81,46 @@ class ChatService:
             conversation_history=history
         )
 
-        # 8. 保存AI响应
-        ai_message = self.conversation_service.add_message(
-            conversation_id=conversation.id,
-            message_data=MessageCreate(content=result["response"], role="assistant"),
-            token_count=len(result["raw_response"]) // 2,
-            model_used=result["model_used"]
-        )
+        # 8. 批量保存所有更新（合并事务）
+        try:
+            # 保存AI响应
+            ai_message = self.conversation_service.add_message(
+                conversation_id=conversation.id,
+                message_data=MessageCreate(content=result["response"], role="assistant"),
+                token_count=len(result["raw_response"]) // 2,
+                model_used=result["model_used"]
+            )
 
-        # 9. 更新记忆
-        memory_manager.update_agent_state(
-            user_input=message,
-            agent_response=result["raw_response"],
-            extracted_info=result["extracted_info"],
-            conversation_id=conversation.id
-        )
+            # 更新记忆
+            memory_manager.update_agent_state(
+                user_input=message,
+                agent_response=result["raw_response"],
+                extracted_info=result["extracted_info"],
+                conversation_id=conversation.id
+            )
 
-        # 10. 更新对话阶段
-        conversation.current_stage = agent_state.current_stage
-        conversation.updated_at = datetime.utcnow()
-        self.db.commit()
+            # 批量更新所有相关状态
+            conversation.current_stage = agent_state.current_stage
+            conversation.updated_at = datetime.utcnow()
+            conversation.last_message_at = datetime.utcnow()
 
-        # 11. 更新智能体使用统计
-        agent_config.usage_count += 1
-        agent_config.total_conversations = self.db.query(Conversation).filter(
-            Conversation.agent_id == agent_config.id
-        ).count()
-        self.db.commit()
+            # 更新智能体使用统计
+            agent_config = self.db.query(AgentConfig).filter(
+                AgentConfig.id == agent_config_dict["id"]
+            ).first()
+            agent_config.usage_count += 1
+
+            # 统一提交所有更改
+            self.db.commit()
+
+        except Exception as e:
+            self.db.rollback()
+            raise e
 
         return {
             "response": result["response"],
             "conversation_id": conversation.id,
-            "agent_name": agent_config.display_name,
+            "agent_name": agent_config_dict["display_name"],
             "current_stage": agent_state.current_stage,
             "message_id": ai_message.id,
             "timestamp": result["timestamp"],
@@ -155,7 +163,7 @@ class ChatService:
         if not conversation:
             raise ValueError("对话不存在或无权访问")
 
-        # 获取智能体
+            # 获取智能体
         agent_config = self.db.query(AgentConfig).filter(
             AgentConfig.id == conversation.agent_id
         ).first()
@@ -163,7 +171,7 @@ class ChatService:
         if not agent_config:
             raise ValueError("关联的智能体不存在")
 
-        # 获取最近的消息作为上下文
+            # 获取最近的消息作为上下文
         recent_messages = self.get_conversation_messages(conversation_id, user_id, limit=3)
 
         # 如果没有初始消息，生成一个开场
@@ -184,7 +192,7 @@ class ChatService:
                 "conversation_id": conversation.id,
                 "agent_name": agent_config.display_name,
                 "current_stage": conversation.current_stage,
-                "message_count": conversation.message_count,
+                "message_count": len(recent_messages),
                 "last_updated": conversation.updated_at.isoformat(),
                 "recent_messages": recent_messages
             }

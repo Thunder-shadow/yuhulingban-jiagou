@@ -99,6 +99,16 @@ async def get_current_user_info(
     """获取当前用户信息"""
     service = UserService(db)
 
+    # 动态计算统计数据
+    from app.models import Conversation, Message
+    conversation_count = db.query(Conversation).filter(
+        Conversation.user_id == current_user.id
+    ).count()
+
+    message_count = db.query(Message).join(Conversation).filter(
+        Conversation.user_id == current_user.id
+    ).count()
+
     return {
         "id": current_user.id,
         "username": current_user.username,
@@ -107,13 +117,12 @@ async def get_current_user_info(
         "avatar_url": current_user.avatar_url,
         "bio": current_user.bio,
         "gender": current_user.gender,
-        "location": current_user.location,
         "role": current_user.role.value,
         "status": current_user.status.value,
         "preferences": current_user.preferences,
         "stats": {
-            "message_count": current_user.message_count,
-            "conversation_count": current_user.conversation_count,
+            "message_count": message_count,  # 动态计算
+            "conversation_count": conversation_count,  # 动态计算
             "login_count": current_user.login_count
         },
         "created_at": current_user.created_at.isoformat(),
